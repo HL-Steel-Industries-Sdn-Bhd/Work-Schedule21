@@ -155,6 +155,18 @@
       font-size: 20px;
       min-height: 50px;
     }
+    /* ✅ 呼吸光动画 */
+    @keyframes breatheYellow {
+      0%,100% { box-shadow: 0 0 6px 2px rgba(255, 255, 0, 0.4); }
+      50% { box-shadow: 0 0 20px 6px rgba(255, 255, 0, 0.8); }
+    }
+    @keyframes breatheCyan {
+      0%,100% { box-shadow: 0 0 6px 2px rgba(0, 255, 255, 0.4); }
+      50% { box-shadow: 0 0 20px 6px rgba(0, 255, 255, 0.8); }
+    }
+    .breathe-yellow { animation: breatheYellow 2.5s ease-in-out infinite; }
+    .breathe-cyan { animation: breatheCyan 2.5s ease-in-out infinite; }
+
     .cell {
       background: #f9f9f9;
       border: 1px solid #e0e0e0;
@@ -228,19 +240,6 @@
     }
     .submit-btn:active { transform: translateY(1px); }
 
-    /* ================= 呼吸光效果 ================= */
-    @keyframes breathe-gold {
-      0%, 100% { box-shadow: 0 0 4px 0px rgba(255, 215, 0, 0.3); }
-      50% { box-shadow: 0 0 16px 4px rgba(255, 215, 0, 0.8); }
-    }
-    @keyframes breathe-blue {
-      0%, 100% { box-shadow: 0 0 4px 0px rgba(52, 152, 219, 0.3); }
-      50% { box-shadow: 0 0 16px 4px rgba(52, 152, 219, 0.8); }
-    }
-
-    .employee-name.gold-breathe { animation: breathe-gold 2s ease-in-out infinite; border-color: #FFD700; }
-    .employee-name.blue-breathe { animation: breathe-blue 2s ease-in-out infinite; border-color: #3498db; }
-
     @media (max-width: 900px) {
       .projects-sidebar { width: 200px; }
       .text-input { font-size: 16px; }
@@ -262,7 +261,7 @@
           <div id="projects"></div>
         </div>
 
-        <!-- ✅ 垃圾桶占位区域 -->
+        <!-- ✅ 垃圾桶占位区域（你可替换成自己的 base64 图片） -->
         <div class="trash-box" id="trashBox">
           <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA..." alt="trash icon (placeholder)" />
         </div>
@@ -329,9 +328,9 @@
       empDiv.className = 'employee-name';
       empDiv.innerText = emp.name;
 
-      // 添加呼吸光效果
-      if(['Seah','Chay'].includes(emp.name)) empDiv.classList.add('gold-breathe');
-      if(['Poh','Albert','Aung Thant','Chin'].includes(emp.name)) empDiv.classList.add('blue-breathe');
+      // ✅ 添加呼吸光效果
+      if(['Seah','Chay'].includes(emp.name)) empDiv.classList.add('breathe-yellow');
+      if(['Poh','Albert','Aung Thant','Chin'].includes(emp.name)) empDiv.classList.add('breathe-cyan');
 
       schedule.appendChild(empDiv);
       hours.forEach((hour, colIndex) => {
@@ -449,68 +448,137 @@
         e.preventDefault();
         if(dragInfo&&dragInfo.cells.length>0){
           createMergedProject(dragInfo);
-          clearHighlights();
           dragInfo=null;
+          if(selectedCell){selectedCell.classList.remove('selected');selectedCell=null;}
         }
+        clearHighlights();
       });
     });
 
-    function highlightCells(start,end){
+    function isDraggingOverAnyCell(){
+      return Array.from(allCells).some(cell=>cell.matches(':hover')||cell.querySelector(':hover'));
+    }
+    function highlightCells(startCell,endCell){
       clearHighlights();
-      const startRow=parseInt(start.dataset.row);
-      const endRow=parseInt(end.dataset.row);
-      const startCol=parseInt(start.dataset.col);
-      const endCol=parseInt(end.dataset.col);
-      const minRow=Math.min(startRow,endRow),maxRow=Math.max(startRow,endRow);
-      const minCol=Math.min(startCol,endCol),maxCol=Math.max(startCol,endCol);
-      dragInfo.cells=[];
-      for(let r=minRow;r<=maxRow;r++){
-        for(let c=minCol;c<=maxCol;c++){
-          const cell=document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
-          if(cell&&!cell.classList.contains('break')){
-            cell.classList.add('highlight');
-            dragInfo.cells.push(cell);
-          }
+      if(!startCell||!endCell)return;
+      const row=startCell.dataset.row;
+      if(row!==endCell.dataset.row)return;
+      let start=parseInt(startCell.dataset.col);
+      let end=parseInt(endCell.dataset.col);
+      if(end<start)[start,end]=[end,start];
+      const validCells=[];
+      for(let c=start;c<=end;c++){
+        if(breakCols.includes(c))continue;
+        const cell=document.querySelector(`.cell[data-row="${row}"][data-col="${c}"]`);
+        if(cell){cell.classList.add('highlight');validCells.push(cell);}
+      }
+      dragInfo.cells=validCells;
+    }
+    function clearHighlights(){
+      document.querySelectorAll('.cell.highlight').forEach(cell=>cell.classList.remove('highlight'));
+    }
+    function createMergedProject(dragInfo){
+      if(!dragInfo||dragInfo.cells.length===0)return;
+      dragInfo.cells=dragInfo.cells.filter(c=>!breakCols.includes(parseInt(c.dataset.col)));
+      if(dragInfo.cells.length===0)return;
+      dragInfo.cells.sort((a,b)=>parseInt(a.dataset.col)-parseInt(b.dataset.col));
+      const row=dragInfo.cells[0].dataset.row;
+      const startCol=parseInt(dragInfo.cells[0].dataset.col);
+      const endCol=parseInt(dragInfo.cells[dragInfo.cells.length-1].dataset.col);
+      let segment=[];let segments=[];
+      for(let c=startCol;c<=endCol;c++){
+        if(breakCols.includes(c)){
+          if(segment.length>0){segments.push(segment);segment=[];}
+        }else{
+          const cell=document.querySelector(`.cell[data-row="${row}"][data-col="${c}"]`);
+          if(cell)segment.push(cell);
         }
       }
-    }
-
-    function clearHighlights(){allCells.forEach(c=>c.classList.remove('highlight'));}
-
-    function isDraggingOverAnyCell(){return !!document.querySelector('.cell.highlight');}
-
-    function createMergedProject(drag){
-      const {cells,projectName,projectId}=drag;
-      const mergedDiv=document.createElement('div');
-      mergedDiv.className='assigned-project merged';
-      mergedDiv.innerText=projectName;
-      const codeMatch=projectName.match(/\((\d+)-/);
-      if(codeMatch){
-        const code=codeMatch[1];
-        mergedDiv.style.background=projectCodeColorMap[code]||'#eee';
-      }
-      cells.forEach(c=>{
-        c.innerHTML='';
-        c.appendChild(mergedDiv);
-        c.classList.remove('highlight');
-        c.classList.add('occupied');
+      if(segment.length>0)segments.push(segment);
+      segments.forEach(seg=>{
+        const tempInfo={...dragInfo,cells:seg};
+        makeOneMergedBlock(tempInfo);
       });
     }
-
-    trashBox.addEventListener('dragover',function(e){e.preventDefault();this.classList.add('dragover');});
-    trashBox.addEventListener('dragleave',function(){this.classList.remove('dragover');});
-    trashBox.addEventListener('drop',function(e){
-      e.preventDefault();
-      this.classList.remove('dragover');
-      if(dragInfo&&dragInfo.cells.length>0){
-        dragInfo.cells.forEach(c=>{c.innerHTML='';c.classList.remove('occupied');});
-        dragInfo=null;
+    function makeOneMergedBlock(dragInfo){
+      if(dragInfo.cells.length===0)return;
+      dragInfo.cells.sort((a,b)=>parseInt(a.dataset.col)-parseInt(b.dataset.col));
+      const row=dragInfo.cells[0].dataset.row;
+      const startCol=parseInt(dragInfo.cells[0].dataset.col);
+      const endCol=parseInt(dragInfo.cells[dragInfo.cells.length-1].dataset.col);
+      dragInfo.cells.forEach(c=>c.classList.add('occupied'));
+      const merged=document.createElement('div');
+      merged.className='assigned-project merged';
+      merged.innerText=dragInfo.projectName;
+      merged.dataset.row=row;
+      merged.dataset.startCol=startCol;
+      merged.dataset.endCol=endCol;
+      const codeMatch=dragInfo.projectName.match(/\((\d+)-/);
+      if(codeMatch&&projectCodeColorMap[codeMatch[1]]){
+        merged.style.background=projectCodeColorMap[codeMatch[1]];
       }
-    });
+      if(dragInfo.cells.length===1){merged.style.fontSize='14px';}
+      const first=dragInfo.cells[0];
+      const last=dragInfo.cells[dragInfo.cells.length-1];
+      const firstRect=first.getBoundingClientRect();
+      const lastRect=last.getBoundingClientRect();
+      const schedRect=schedule.getBoundingClientRect();
+      const rawLeft=firstRect.left-schedRect.left;
+      const rawWidth=lastRect.right-firstRect.left;
+      const top=firstRect.top-schedRect.top;
+      const height=firstRect.height;
+      merged.style.left=rawLeft+'px';
+      merged.style.width=rawWidth+'px';
+      merged.style.top=top+'px';
+      merged.style.height=height+'px';
+      merged.addEventListener('click',function(e){
+        e.stopPropagation();
+        const row=this.dataset.row;
+        const start=parseInt(this.dataset.startCol);
+        const end=parseInt(this.dataset.endCol);
+        for(let c=start;c<=end;c++){
+          const cell=document.querySelector(`.cell[data-row="${row}"][data-col="${c}"]`);
+          if(cell)cell.classList.remove('occupied');
+        }
+        this.remove();
+      });
+      schedule.appendChild(merged);
+    }
 
     submitTask.addEventListener('click',function(){
       const val=newTaskInput.value.trim();
-      if(val){createProjectElement({id:'proj-'+Date.now(),name:val},true);newTaskInput.value='';}
+      if(!val)return;
+      const id='project_new_'+Date.now();
+      const project={id:id,name:val};
+      createProjectElement(project,true);
+      newTaskInput.value='';
+      projectsBox.scrollTop=0;
+    });
+    newTaskInput.addEventListener('keydown',function(e){
+      if(e.key==='Enter'){e.preventDefault();submitTask.click();}
+    });
+
+    // ✅ 垃圾桶拖拽删除逻辑
+    trashBox.addEventListener('dragover',function(e){
+      e.preventDefault();
+      this.classList.add('dragover');
+    });
+    trashBox.addEventListener('dragleave',function(){
+      this.classList.remove('dragover');
+    });
+    trashBox.addEventListener('drop',function(e){
+      e.preventDefault();
+      this.classList.remove('dragover');
+      const projectId=e.dataTransfer.getData('text/plain');
+      const el=document.getElementById(projectId);
+      // 初始项目不可删
+      if(el && !projectId.startsWith('project_new_')) {
+        alert('⚠️ 初始任务不可删除');
+        return;
+      }
+      if(el && el.parentElement){
+        el.remove();
+      }
     });
   });
   </script>
